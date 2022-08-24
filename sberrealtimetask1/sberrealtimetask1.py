@@ -1,28 +1,18 @@
-#! /usr/bin/env python3
-
 # В процессе решения!
+# nc -lk 127.0.0.1 -p 10000
 
-from hdfs import Config
-import subprocess
+from pyspark import SparkContext
+from pyspark.streaming import StreamingContext
 
-client = Config().get_client()
-nn_address = subprocess.check_output('hdfs getconf -confKey dfs.namenode.http-address', shell=True).strip().decode("utf-8")
+sc = SparkContext(master='local[4]')
+ssc = StreamingContext(sc, batchDuration=10)
 
-sc = SparkContext(master='yarn-client')
-
-# Preparing base RDD with the input data
-DATA_PATH = "/data/realtime/uids"
-
-batches = [sc.textFile(os.path.join(*[nn_address, DATA_PATH, path])) for path in client.list(DATA_PATH)[:30]]
-
-# Creating QueueStream to emulate realtime data generating
-BATCH_TIMEOUT = 2 # Timeout between batch generation
-ssc = StreamingContext(sc, BATCH_TIMEOUT)
-dstream = ssc.queueStream(rdds=batches)
+dstream = ssc.socketTextStream(hostname='localhost', port=10000)
 
 result = dstream.filter(bool).count()
-result.pprint()
 
+result.pprint()
 
 ssc.start()
 ssc.awaitTermination()
+
