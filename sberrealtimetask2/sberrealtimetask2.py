@@ -33,55 +33,29 @@ def set_ending_flag(rdd):
         finished = True
 
 
-def parse_to_hll(rdd):
-    global seg_iphone
-    global seg_firefox
-    global seg_windows
-    # rdd.count()
-    for line in rdd.collect():
-        user_id = line.split('\t')[0]
-        user_agent = line.split('\t')[1]
-        if 'Windows' in user_agent:
-            seg_windows.add(user_id)
-        if 'iPhone' in user_agent:
-            seg_iphone.add(user_id)
-        if 'Firefox' in user_agent:
-            seg_firefox.add(user_id)
-
-
-def print_only_at_the_end(rdd):
+def count_and_print_at_the_end(rdd):
     global printed
-    rdd.count()
-    if finished and not printed:
-        for line in rdd.takeOrdered(1):
-            print(line)
-        printed = True
-
-
-def print_always(rdd):
     l = rdd.collect()[0]
-    print('seg_windows: {}'.format( len( l['seg_windows'] ) ))
-    print('seg_firefox: {}'.format( len( l['seg_firefox'] ) ))
-    print('seg_iphone:  {}'.format( len( l['seg_iphone']  ) ))
-    print()
+    if finished and not printed:
+        seg_windows_hll = hyperloglog.HyperLogLog(0.01)
+        seg_firefox_hll = hyperloglog.HyperLogLog(0.01)
+        seg_iphone_hll = hyperloglog.HyperLogLog(0.01)
 
-    seg_windows_hll = hyperloglog.HyperLogLog(0.01)
-    seg_firefox_hll = hyperloglog.HyperLogLog(0.01)
-    seg_iphone_hll = hyperloglog.HyperLogLog(0.01)
+        for line in l['seg_windows']:
+            seg_windows_hll.add(line)
 
-    for line in l['seg_windows']:
-        seg_windows_hll.add(line)
+        for line in l['seg_firefox']:
+            seg_firefox_hll.add(line)
 
-    for line in l['seg_firefox']:
-        seg_firefox_hll.add(line)
+        for line in l['seg_iphone']:
+            seg_iphone_hll.add(line)
 
-    for line in l['seg_iphone']:
-        seg_iphone_hll.add(line)
-
-    print('seg_windows_hll: {}'.format( len( seg_windows_hll ) ))
-    print('seg_firefox_hll: {}'.format( len( seg_firefox_hll ) ))
-    print('seg_iphone_hll:  {}'.format( len( seg_iphone_hll ) ))
-    print()
+        d = {'seg_windows': len(seg_windows_hll),
+             'seg_firefox': len(seg_firefox_hll),
+             'seg_iphone': len(seg_iphone_hll),
+             }
+        for k in sorted(d, key=d.get, reverse=True):
+            print("{}\t{}".format(k, d[k]))
 
 
 def aggregator(values, old):
@@ -111,7 +85,7 @@ dstream \
     .map(lambda line: ('res', line)) \
     .updateStateByKey(aggregator) \
     .map(lambda x: x[1]) \
-    .foreachRDD(print_always)
+    .foreachRDD(count_and_print_at_the_end)
 
 
 ssc.checkpoint('./checkpoint{}'
@@ -120,8 +94,3 @@ ssc.start()
 while not finished:
     time.sleep(0.01)
 ssc.stop()
-
-
-# d = {'seg_windows': len(seg_windows), 'seg_iphone': len(seg_iphone), 'seg_firefox': len(seg_firefox)}
-# for k in sorted(d, key=d.get, reverse=True):
-#     print("{}\t{}".format(k, d[k]))
