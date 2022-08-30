@@ -4,7 +4,7 @@ import re
 from pyspark import SparkContext, SparkConf
 
 config = SparkConf()\
-    .setAppName('in2202212_sbersparktask1')\
+    .setAppName('spark_edu')\
     .setMaster('yarn-client')\
     .set('spark.kryoserializer.buffer.max', 2000)
 spark_context = SparkContext(conf=config)
